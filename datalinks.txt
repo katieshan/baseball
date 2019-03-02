@@ -1,0 +1,8 @@
+https://www.kaggle.com/open-source-sports/baseball-databank
+https://www.kaggle.com/pschale/mlb-pitch-data-20152018
+https://news.usc.edu/139033/predict-baseball-injuries-before-they-occur-usc-physical-therapy/
+https://github.com/baseballhackday/data-and-resources/wiki/Resources-and-ideas
+
+Alex's forecasts:
+HITTERS: https://bit.ly/2T654Y9
+PITCHERS: https://bit.ly/2Xw03GS
