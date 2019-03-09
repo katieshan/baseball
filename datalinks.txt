@@ -2,6 +2,14 @@ https://www.kaggle.com/open-source-sports/baseball-databank
 https://www.kaggle.com/pschale/mlb-pitch-data-20152018
 https://news.usc.edu/139033/predict-baseball-injuries-before-they-occur-usc-physical-therapy/
 https://github.com/baseballhackday/data-and-resources/wiki/Resources-and-ideas
+https://sabr.org/sabermetrics/data
+http://www.seanlahman.com/baseball-archive/statistics/
+https://www.retrosheet.org/
+https://www.rdocumentation.org/packages/retrosheet/versions/1.0.2
+https://cran.r-project.org/web/packages/Lahman/Lahman.pdf
+https://github.com/chadwickbureau/retrosplits
+https://groups.yahoo.com/neo/groups/baseball-databank/info
+https://www.rotowire.com/baseball/stats.php--has holds per season
 
 Alex's forecasts:
 HITTERS: https://bit.ly/2T654Y9
