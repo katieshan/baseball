@@ -1,0 +1,103 @@
+setwd("C:/Users/580377/Documents/Personal/GitHub/baseball")
+setwd("C:/Users/Katie/Documents/GitHub/baseball")
+source("preprocessing_code/calcpoints.R")
+library(tidyverse)
+library(mlr)
+
+#bring in retrosplit data
+retrosplits0 <- read_csv("raw_data/retrosplits-master/retrosplits-master/daybyday/playing-2017.csv")
+
+#bring in varable info and pull preprocessing, pitching, and batting fields
+retrovars <- read_csv("raw_data/retrosplits_vars.csv")
+retrocols <- retrovars$varname[retrovars$in_preprocess==1]
+pitchcols <- retrovars$varname[retrovars$pitch==1]
+batcols <- retrovars$varname[retrovars$bat==1]
+
+#filter to preprocessing fields
+retro1 <- retrosplits0 %>% select(c(retrocols)) %>% filter(season.phase=="R")
+
+#create game win and loss info (total runs per team per game)
+retrogames <- retro1 %>% select(game.key, team.key, opponent.key, team.alignment, B_R)
+retrogames_h <- retrogames %>% filter(team.alignment==1) %>% 
+  group_by(game.key, team.key) %>%
+  summarise(homescore=sum(B_R)) %>%
+  rename(team.key.home=team.key)
+retrogames_a <- retrogames %>% filter(team.alignment==0) %>% 
+  group_by(game.key, team.key) %>%
+  summarise(awayscore=sum(B_R)) %>%
+  rename(team.key.away=team.key)
+retrogames <- merge(retrogames_h, retrogames_a, by="game.key")
+
+#pull out pitches and merge on games
+retropitches <- retro1 %>% 
+  select(pitchcols) %>%
+  filter(P_G==1) %>%
+  merge(., retrogames, by="game.key")
+
+#get game scores into pitch data
+retropitches <- retropitches %>%
+  mutate(teamwon = if_else((team.alignment==1 & homescore>awayscore) | (team.alignment==0 & awayscore > homescore), 1, 0),         
+         teamscore = if_else (team.alignment==1, homescore, awayscore),
+         oppscore = if_else(team.alignment==1, awayscore, homescore)) %>%
+  select(-homescore, -awayscore, -team.alignment, -team.key.away, -team.key.home)
+
+#add up to impute holds; look at runs scored before and after each pitcher,
+#and if previous or subsequent pitcher got the win or loss
+retropitches <- retropitches %>%
+  arrange(game.key, team.key, seq) %>%
+  group_by(game.key, team.key) %>%
+  mutate(prevruns = cumsum(P_R) - P_R,
+         prevwin = cumsum(P_W) - P_W,
+         prevloss = cumsum(P_L) - P_L) %>%
+  arrange(game.key, team.key, -seq) %>%
+  group_by(game.key, team.key) %>%
+  mutate(subruns = cumsum(P_R) - P_R,
+         subwin = cumsum(P_W) - P_W,
+         subloss = cumsum(P_L) - P_L) %>%
+  arrange(game.key, team.key, seq) %>%
+  ungroup()
+
+#pull out possible holds--neither wins nor losses, middle relievers, at least one out
+holdcands <- retropitches %>%
+  filter(P_GS==0 & P_W==0 & P_L==0 & P_SV==0 & P_GF==0 & P_OUT>=1) %>%
+  #calculate holds
+  #if a previous pitcher got the win, it's a hold
+  #if a subsequent pitcher got the loss, and the opponent's score at the end
+  #of the the pitcher's turn was less than the home team's final score,
+  #it might have been a hold.  give it to them and test later.
+  mutate(holdwins= if_else(prevwin==1, 1, 0),
+         holdloss=if_else(subloss==1 & (oppscore - subruns < teamscore),1,0)) %>%
+  select(game.key, person.key, holdwins, holdloss)
+
+#merge the holds back on and calculate final holds and innings pitched
+retropitches <- merge(retropitches, holdcands, by=c("game.key", "person.key"), all.x=TRUE)
+retropitches$holdsest <- retropitches$holdloss + retropitches$holdwins
+retropitches$holdsest[is.na(retropitches$holdsest)]<- 0
+retropitches$IP <- retropitches$P_OUT/3
+
+#run the point calculation function
+retropitches$points <-  calcpitch(df=retropitches, GS="P_GS", IP="IP",ER="P_ER",PBB="P_BB",K="P_SO",SV="P_SV",HLD="holdsest")
+
+rm(holdcands, retrogames_a, retrogames_h) 
+
+#now batters
+#pull out batters and merge on games
+retrobats <- retro1 %>% 
+  filter(P_G==0) %>%
+  select(batcols) %>%
+  merge(., retrogames, by="game.key")
+
+retrobats <- retrobats %>%
+  mutate(B_1B = B_H - B_2B - B_3B - B_HR,
+         NSB = B_SB - B_CS)
+
+retrobats$points <-  calcbat(df=retrobats, R="B_R", S="B_1B", D="B_2B", Tr="B_3B", HR="B_HR", RBI="B_RBI", BBB="B_BB", NSB = "NSB")
+
+retropitches <- retropitches %>%
+  select(-season.phase, -slot, -P_G, -holdloss, -holdwins)
+write.csv(retropitches, "clean_data/retropitches.csv")
+
+retrobats <- retrobats %>%
+  select(-season.phase, -P_G, -holdloss, -holdwins, -team.key.home, -team.key.away)
+write.csv(retrobats, "clean_data/retrobats.csv")
+
