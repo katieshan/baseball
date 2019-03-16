@@ -28,11 +28,6 @@ retrorun <- function(year){
     filter(season.phase=="R") %>%
     mutate(game.date = as.Date(game.date), team.key = as.factor(team.key), opponent.key = as.factor(opponent.key))
   
-  nrow(retro1)
-  retro1 <- merge(retro1, people, by.x = "person.key", by.y="retroID", all.x = TRUE)
-  nrow(retro1)
-  sum(is.na(retro1$playerID))
-  
   summary(retro1)
   
   #create game win and loss info (total runs per team per game)
@@ -85,7 +80,8 @@ retrorun <- function(year){
     #of the the pitcher's turn was less than the home team's final score,
     #it might have been a hold.  give it to them and test later.
     mutate(holdwins= if_else(prevwin==1, 1, 0),
-           holdloss=if_else(subloss==1 & (oppscore - subruns < teamscore),1,0)) %>%
+           # holdloss=if_else(subloss==1 & (oppscore - subruns < teamscore),1,0)) %>%
+           holdloss=0) %>%
     select(game.key, person.key, holdwins, holdloss)
   
   #merge the holds back on and calculate final holds and innings pitched
@@ -114,14 +110,25 @@ retrorun <- function(year){
   
   retrobats$points <-  calcbat(df=retrobats, R="B_R", S="B_1B", D="B_2B", Tr="B_3B", HR="B_HR", RBI="B_RBI", BBB="B_BB", NSB = "NSB")
   
-  
   retropitches <- retropitches %>%
-    select(-season.phase, -slot, -P_G, -holdloss, -holdwins)
+    select(-slot, -P_G, -season.phase)
+  
+  nrow(retropitches)
+  retropitches <- merge(retropitches, people, by.x = "person.key", by.y="retroID", all.x = TRUE)
+  nrow(retropitches)
+  sum(is.na(retropitches$playerID))
+  
   write.csv(retropitches, outpitch)
   saveRDS(retropitches, outpitchrds)
   
   retrobats <- retrobats %>%
-    select(-season.phase, -team.key.home, -team.key.away)
+    select(-season.phase)
+  
+  # nrow(retrobats)
+  # retrobats <- merge(retrobats, people, by.x = "person.key", by.y="retroID", all.x = TRUE)
+  # nrow(retrobats)
+  # sum(is.na(retrobats$playerID))
+  
   write.csv(retrobats, outbat)
   saveRDS(retrobats, outbatrds)
 }
