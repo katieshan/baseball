@@ -2,6 +2,13 @@ setwd("C:/Users/580377/Documents/Personal/GitHub/baseball")
 setwd("C:/Users/Katie/Documents/GitHub/baseball")
 source("preprocessing_code/calcpoints.R")
 library(tidyverse)
+library(lubridate)
+
+#this function calculates modes
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
 
 #This function cleans the retrosheet data
 retrorun <- function(year){
@@ -11,6 +18,9 @@ retrorun <- function(year){
   outbat = paste0("clean_data/retrobats", year ,".csv")
   outpitchrds = paste0("clean_data/retropitches", year ,".rds")
   outbatrds = paste0("clean_data/retrobats", year ,".rds")
+  outbattrain = paste0("clean_data/battrain", year ,".rds")
+  outpitchtrain = paste0("clean_data/pitchtrain", year ,".rds")
+  start <- paste(year, 04, 01, sep="-") %>% ymd() %>% as.Date()
   
   people <- readRDS("clean_data/databank_people.rds")
   
@@ -111,10 +121,10 @@ retrorun <- function(year){
   retrobats$points <-  calcbat(df=retrobats, R="B_R", S="B_1B", D="B_2B", Tr="B_3B", HR="B_HR", RBI="B_RBI", BBB="B_BB", NSB = "NSB")
   
   retropitches <- retropitches %>%
-    select(-slot, -P_G, -season.phase)
+    select(-slot, -P_G, -season.phase, -prevruns, -prevwin, -prevloss, -subruns, -subwin, -subloss, -holdwins, -holdloss)
   
   nrow(retropitches)
-  retropitches <- merge(retropitches, people, by.x = "person.key", by.y="retroID", all.x = TRUE)
+  # retropitches <- merge(retropitches, people, by.x = "person.key", by.y="retroID", all.x = TRUE)
   nrow(retropitches)
   sum(is.na(retropitches$playerID))
   
@@ -131,6 +141,114 @@ retrorun <- function(year){
   
   write.csv(retrobats, outbat)
   saveRDS(retrobats, outbatrds)
+  
+  #Now get game numbers
+  bats_sum <- retrobats %>%
+    select(-game.key, -game.date, -team.alignment, -team.key, -opponent.key, -slot, -seq,
+           team.key.home, -team.key.away, -homescore, -awayscore) %>%
+    group_by(person.key) %>%
+    summarise_if(is.numeric, funs(sum=sum), na.rm=TRUE)
+  
+  bats_mean <- retrobats %>%
+    select(-game.key, -game.date, -team.alignment, -team.key, -opponent.key, -slot, -seq,
+           team.key.home, -team.key.away, -homescore, -awayscore, -B_G_DH, -B_G_PH, -B_G_PR, -F_1B_POS,
+           -F_2B_POS, -F_3B_POS, -F_SS_POS, -F_OF_POS, -F_LF_POS, -F_CF_POS, -F_RF_POS, F_C_POS, -F_P_POS) %>%
+    group_by(person.key) %>%
+    summarise_if(is.numeric, funs(mean=mean), na.rm=TRUE)
+  
+  bats_sd <- retrobats %>%
+    select(-game.key, -game.date, -team.alignment, -team.key, -opponent.key, -slot, -seq,
+           team.key.home, -team.key.away, -homescore, -awayscore, -B_G_DH, -B_G_PH, -B_G_PR, -F_1B_POS,
+           -F_2B_POS, -F_3B_POS, -F_SS_POS, -F_OF_POS, -F_LF_POS, -F_CF_POS, -F_RF_POS, F_C_POS, -F_P_POS) %>%
+    group_by(person.key) %>%
+    summarise_if(is.numeric, funs(sd=sd), na.rm=TRUE)
+  
+  bats_mode <- retrobats %>%
+    select(person.key, team.key, slot) %>%
+    group_by(person.key) %>%
+    summarise_all(funs(mode=getmode))
+  
+  bats_all <- merge(bats_sum, bats_mean, by="person.key")
+  bats_all <- merge(bats_all, bats_sd, by="person.key")
+  bats_all <- merge(bats_all, bats_mode, by="person.key")
+  
+  mean_points <- arrange(bats_all, desc(points_sum)) %>%
+    select(points_sum, points_mean) %>%
+    top_n(90, points_sum) %>%
+    summarise(mean(points_mean))
+  
+  games_above  <- retrobats %>%
+    select(person.key, points) %>%
+    mutate(games=1, games_above=if_else(points>as.numeric(mean_points), 1, 0)) %>%
+    select(-points) %>%
+    group_by(person.key) %>%
+    summarise_all(funs(count=sum), na.rm=TRUE)
+  
+  bats_all <- merge(bats_all, games_above, by="person.key") %>%
+    merge(., people, by.x="person.key", by.y="retroID", all.x=TRUE)%>%
+    mutate(team.key_mode=as.factor(team.key_mode), 
+           slot_mode = as.factor(slot_mode),
+           bats=as.factor(bats),
+           throws=as.factor(throws),
+           debut=as.Date(debut),
+           birthdate=as.Date(birthdate),
+           since_debut = (start-debut)/365.25,
+           age=(start-birthdate)/365.25) %>%
+    select(-playerID, -bbrefID, nameFirst, -nameLast, -nameGiven,-debut, -birthdate)
+  
+  rm(retrobats, bats_mean, bats_mode, bats_sd, bats_sum, games_above, mean_points)
+  
+  write.csv(bats_all, outbattrain)
+  
+  #now pitchers
+  pitches_sum <- retropitches %>%
+    select(-game.key, -game.date, -team.key, -opponent.key, -seq, teamwon, -teamscore, -oppscore) %>%
+    group_by(person.key) %>%
+    summarise_if(is.numeric, funs(sum=sum), na.rm=TRUE)
+  
+  pitches_mean <- retropitches %>%
+    select(-game.key, -game.date, -team.key, -opponent.key, -seq, teamwon, -teamscore, -oppscore) %>%
+    group_by(person.key) %>%
+    summarise_if(is.numeric, funs(mean=mean), na.rm=TRUE)
+  
+  pitches_sd <- retropitches %>%
+    select(-game.key, -game.date, -team.key, -opponent.key, -seq, teamwon, -teamscore, -oppscore) %>%
+    group_by(person.key) %>%
+    summarise_if(is.numeric, funs(sd=sd), na.rm=TRUE)
+  
+  pitches_mode <- retropitches %>%
+    select(person.key, team.key) %>%
+    group_by(person.key) %>%
+    summarise_all(funs(team.key_mode=getmode))
+  
+  pitches_all <- merge(pitches_sum, pitches_mean, by="person.key")
+  pitches_all <- merge(pitches_all, pitches_sd, by="person.key")
+  pitches_all <- merge(pitches_all, pitches_mode, by="person.key")
+  
+  mean_points <- arrange(pitches_all, desc(points_sum)) %>%
+    select(points_sum, points_mean) %>%
+    top_n(90, points_sum) %>%
+    summarise(mean(points_mean))
+  
+  games_above  <- retropitches %>%
+    select(person.key, points) %>%
+    mutate(games=1, games_above=if_else(points>as.numeric(mean_points), 1, 0)) %>%
+    select(-points) %>%
+    group_by(person.key) %>%
+    summarise_all(funs(count=sum), na.rm=TRUE)
+  
+  pitches_all <- merge(pitches_all, games_above, by="person.key") %>%
+    merge(., people, by.x="person.key", by.y="retroID", all.x=TRUE)%>%
+    mutate(team.key_mode=as.factor(team.key_mode), 
+           bats=as.factor(bats),
+           throws=as.factor(throws),
+           debut=as.Date(debut),
+           birthdate=as.Date(birthdate),
+           since_debut = (start-debut)/365.25,
+           age=(start-birthdate)/365.25) %>%
+    select(-playerID, -bbrefID, -nameFirst, -nameLast, -nameGiven, -debut, -birthdate)
+  
+  write.csv(pitches_all, outpitchtrain)
 }
 
 retrorun(2010)
