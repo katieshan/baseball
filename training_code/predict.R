@@ -1,10 +1,11 @@
 setwd("C:/Users/580377/Documents/Personal/GitHub/baseball")
-setwd("C:/Users/Katie/Documents/GitHub/baseball")
+# setwd("C:/Users/Katie/Documents/GitHub/baseball")
 source("preprocessing_code/calcpoints.R")
 library(tidyverse)
 library(mlr)
 library(lubridate)
 library(glmnet)
+library(mice)
 library(caret)
 
 batimport <- function(year){
@@ -19,7 +20,7 @@ getmode <- function(v) {
   uniqv[which.max(tabulate(match(v, uniqv)))]
 }
 
-bat2018 <- batimport(2018) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut))
+bat2018 <- batimport(2018) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut)) %>% select(-nameFirst)
 
 # fanbat <- read_csv("raw_data/FanGraphs Leaderboardbat.csv") %>%
 #   mutate(mergename=tolower(gsub("[^[:alnum:]]","", Name)))
@@ -60,7 +61,7 @@ batnew <- merge(bat2018ppl, fanbat, by="mergename", all.y=TRUE)
 batnew$single <- batnew$H - batnew$`2B`-batnew$`3B`-batnew$HR
 batnew$nsb <- batnew$SB - batnew$CS
 
-batnew$fanpoints <- calcbat(batnew, R="R", S="single", D="2B", Tr="3B", HR="HR", RBI="RBI", BBB="BB", NSB="nsb")
+batnew$fanpoints <- as.numeric(calcbat(batnew, R="R", S="single", D="2B", Tr="3B", HR="HR", RBI="RBI", BBB="BB", NSB="nsb"))
 teams <- read_csv("clean_data/team_xwalk.csv")
 batnew<- merge(batnew, teams)
 
@@ -85,7 +86,7 @@ pitch2018ppl <- pitch2018 %>% select(person.key, P_GS_sum, P_GF_sum, games_count
   mutate(fullname = paste0(nameFirst, " ", nameLast), mergename=tolower(gsub("[^[:alnum:]]","", fullname)))
 
 pitchnew <- merge(pitch2018ppl, fanpitch, by="mergename", all.y=TRUE)
-pitchnew$fanpoints <- calcpitch(pitchnew, GS="GS", IP="IP", ER="ER", PBB="BB", K="SO", SV="SV", HLD="HLD")
+pitchnew$fanpoints <- as.numeric(calcpitch(pitchnew, GS="GS", IP="IP", ER="ER", PBB="BB", K="SO", SV="SV", HLD="HLD"))
 pitchnew<- merge(pitchnew, teams)
 
 colnames(batnew)
@@ -94,7 +95,7 @@ batpred <- batnew %>%
   filter(!is.na(person.key)) %>%
   select(person.key, age, since_debut, team.key_mode=team.key)
 
-bat2017 <- batimport(2017) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut))
+bat2017 <- batimport(2017) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut))  %>% select(-nameFirst)
 
 lag1 <- bat2018 %>% 
   select(-age, -since_debut) %>%
@@ -112,7 +113,7 @@ batpred <- lapply(batpred, function(col){
     col[is.na(col)] = getmode(col)
     return(as.factor(col))
   }else{
-    col[is.na(col)]= mean(col, na.rm=TRUE)
+    col[is.na(col)]= 0
     return(as.numeric(col))
   }
 }) %>% as.data.frame()
@@ -140,7 +141,7 @@ pitchpred <- lapply(pitchpred, function(col){
     col[is.na(col)] = getmode(col)
     return(as.factor(col))
   }else{
-    col[is.na(col)]= mean(col, na.rm=TRUE)
+    col[is.na(col)]= 0
     return(as.numeric(col))
   }
 }) %>% as.data.frame()
@@ -185,10 +186,97 @@ fixFactorLevels_pred = function(model, newdata, targetvar) {
   return(newdata)
 }
 
-batpred0 <- fixFactorLevels_pred(b1, batpred0, "points_sum")
 
 load("clean_data/models.RData")
 
-batpred0 <- select(batpred, -person.key)
-batpred0$points_sum <- NULL
-pb1 <- predict(b1, newdata=batpred0)
+batpred0 <- batpred %>% mutate(year=2019)
+
+batpred0$points_sum <- NA
+batpred0$games_count <- NA
+batpred0$games_above_count <- NA
+batpred0$points_mean <- NA
+batpred0$points_sd <- NA
+batpred0 <- predict(ppbat, batpred0)
+outcome_cols <- c("person.key", "games_count", "games_above_count", "points_sum", "points_mean", "points_sd")
+
+batpred0 <- select(batpred0, -outcome_cols) %>%
+  mutate(points_sum = NA)
+batpred0 <-  fixFactorLevels_pred(b1, batpred0, "points_sum")
+# batpred0 <- impute(batpred0, classes=list(numeric=mice.impute.mean(), factor=mice.impute.mode()))$data
+npb1 <- predict(b1, newdata=batpred0)
+
+
+batpred0 <- batpred0 %>% select(-points_sum)
+batpred0$games_count <- NA
+batpred0 <- fixFactorLevels_pred(b2, batpred0, "games_count")
+npb2 <- predict(b2, newdata=batpred0)
+
+batpred0 <- batpred0 %>% select(-games_count)
+batpred0$games_above_count <- NA
+batpred0 <- fixFactorLevels_pred(b3, batpred0, "games_above_count")
+npb3 <- predict(b3, newdata=batpred0)
+
+batpred1 <- npb1$data
+batpred2 <- npb2$data
+batpred3 <- npb3$data
+
+batpred1$pred_points_sum=batpred1$response*(782-(-1))+(-1)
+batpred2$pred_games_count=batpred2$response*(162-1)+1
+batpred3$pred_games_above_count=batpred3$response*(88-0)+0
+
+batpred1 <- select(batpred1, pred_points_sum)
+batpred2 <- select(batpred2, pred_games_count)
+batpred3 <- select(batpred3, pred_games_above_count)
+batpredperson <- select(batpred, person.key)
+
+batpredout<- cbind(batpredperson, batpred1, batpred2, batpred3)
+
+batnew <- merge(batnew, batpredout, by="person.key", all.x = TRUE) %>%
+  select(person.key, Team, Name, fanpoints, G, pred_points_sum, pred_games_count, pred_games_above_count, fanpos, position)
+write.csv(batnew, "FinalBatPreds.csv")
+
+#Now pitching
+
+pitchpred0 <-pitchpred %>% mutate(year=2019)
+
+pitchpred0$points_sum <- NA
+pitchpred0$games_count <- NA
+pitchpred0$games_above_count <- NA
+pitchpred0$points_mean <- NA
+pitchpred0$points_sd <- NA
+pitchpred0 <- predict(pppitch, pitchpred0)
+pitchpred0 <- select(pitchpred0, -outcome_cols) %>%
+  mutate(points_sum = NA)
+pitchpred0 <- fixFactorLevels_pred(p1, pitchpred0, "points_sum")
+# pitchpred0 <- impute(pitchpred0, classes=list(numeric=mice.impute.mean(), factor=mice.impute.mode()))$data
+npp1 <- predict(p1, newdata=pitchpred0)
+
+pitchpred0 <- pitchpred0 %>% select(-points_sum)
+pitchpred0$games_count <- NA
+pitchpred0 <- fixFactorLevels_pred(p2, pitchpred0, "games_count")
+npp2 <- predict(p2, newdata=pitchpred0)
+
+pitchpred0 <- pitchpred0 %>% select(-games_count)
+pitchpred0$games_above_count <- NA
+pitchpred0 <- fixFactorLevels_pred(p3, pitchpred0, "games_above_count")
+npp3 <- predict(p3, newdata=pitchpred0)
+
+pitchpred1 <- npp1$data
+pitchpred2 <- npp2$data
+pitchpred3 <- npp3$data
+
+pitchpred1$pred_points_sum=pitchpred1$response*(712-(-15.66667))+(-15.66667)
+pitchpred2$pred_games_count=pitchpred2$response*(82-1)+1
+pitchpred3$pred_games_above_count=pitchpred3$response*(31-0)+0
+
+pitchpred1 <- select(pitchpred1, pred_points_sum)
+pitchpred2 <- select(pitchpred2, pred_games_count)
+pitchpred3 <- select(pitchpred3, pred_games_above_count)
+pitchpredperson <- select(pitchpred, person.key)
+
+pitchpredout<- cbind(pitchpredperson, pitchpred1, pitchpred2, pitchpred3)
+
+pitchnew <- merge(pitchnew, pitchpredout, by="person.key", all.x = TRUE) %>%
+  select(person.key, Team, Name, fanpoints, G, pred_points_sum, pred_games_count, pred_games_above_count, position)
+
+write.csv(pitchnew, "FinalpitchPreds.csv")

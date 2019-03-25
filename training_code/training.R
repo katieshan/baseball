@@ -1,7 +1,7 @@
 #databank preprocessing
 
 setwd("C:/Users/580377/Documents/Personal/GitHub/baseball")
-setwd("C:/Users/Katie/Documents/GitHub/baseball")
+# setwd("C:/Users/Katie/Documents/GitHub/baseball")
 source("preprocessing_code/calcpoints.R")
 library(tidyverse)
 library(mlr)
@@ -22,15 +22,15 @@ getmode <- function(v) {
 }
 
 
-bat2010 <- batimport(2010) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut))
-bat2011 <- batimport(2011) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut))
-bat2012 <- batimport(2012) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut))
-bat2013 <- batimport(2013) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut))
-bat2014 <- batimport(2014) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut))
-bat2015 <- batimport(2015) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut))
-bat2016 <- batimport(2016) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut))
-bat2017 <- batimport(2017) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut))
-bat2018 <- batimport(2018) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut))
+bat2010 <- batimport(2010) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut)) %>% select(-nameFirst)
+bat2011 <- batimport(2011) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut)) %>% select(-nameFirst)
+bat2012 <- batimport(2012) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut)) %>% select(-nameFirst)
+bat2013 <- batimport(2013) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut)) %>% select(-nameFirst)
+bat2014 <- batimport(2014) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut)) %>% select(-nameFirst)
+bat2015 <- batimport(2015) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut)) %>% select(-nameFirst)
+bat2016 <- batimport(2016) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut)) %>% select(-nameFirst)
+bat2017 <- batimport(2017) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut)) %>% select(-nameFirst)
+bat2018 <- batimport(2018) %>% mutate(age=as.numeric(age), since_debut=as.numeric(since_debut)) %>% select(-nameFirst)
 
 addup <- function(year, df0, df1, df2){
   lag1<-year-1
@@ -63,7 +63,7 @@ trainbats <- lapply(trainbats, function(col){
     col[is.na(col)] = getmode(col)
     return(as.factor(col))
   }else{
-    col[is.na(col)]= mean(col, na.rm=TRUE)
+    col[is.na(col)]= 0
     return(as.numeric(col))
   }
 }) %>% as.data.frame()
@@ -98,7 +98,7 @@ trainpitch <- lapply(trainpitch, function(col){
     col[is.na(col)] = getmode(col)
     return(as.factor(col))
   }else{
-    col[is.na(col)]= mean(col, na.rm=TRUE)
+    col[is.na(col)]= 0
     return(as.numeric(col))
   }
 }) %>% as.data.frame()
@@ -114,6 +114,13 @@ train <- shuffled_df[train_indices, ]
 test_indices <- (round(0.8 * n) + 1):n
 test <- shuffled_df[test_indices, ]
 
+ppbat = preProcess(train, method = "range")
+train <- predict(ppbat, train)
+test <- predict(ppbat, test)
+
+write_rds(train, "clean_data/trainbats_prepped.rds")
+write_rds(test, "clean_data/testbats_prepped.rds")
+
 outcome_cols <- c("person.key", "games_count", "games_above_count", "points_sum", "points_mean", "points_sd")
 train0 <- train %>% select(-outcome_cols)
 trainout <- train %>% select(outcome_cols)
@@ -127,7 +134,6 @@ glmnet_params=makeParamSet(
 )
 
 set.seed(42)
-data(traintemp)
 
 tuneGLMnet <- function(type, data, iters=3, seed=42, targetVar){
 
@@ -174,11 +180,21 @@ train <- shuffled_df[train_indices, ]
 test_indices <- (round(0.8 * n) + 1):n
 test <- shuffled_df[test_indices, ]
 
+
+pppitch = preProcess(train, method = "range")
+train <- predict(pppitch, train)
+test <- predict(pppitch, test)
+
+write_rds(train, "clean_data/trainpitch_prepped.rds")
+write_rds(test, "clean_data/testpitch_prepped.rds")
+
 train0 <- train %>% select(-outcome_cols)
 trainout <- train %>% select(outcome_cols)
 test0 <- test %>% select(-outcome_cols)
 testout <- test %>% select(outcome_cols)
 pitchout <- testout
+
+
 
 p1<- tuneGLMnet("pitch", train0, targetVar="points_sum")
 p2<- tuneGLMnet("pitch", train0, targetVar="games_count")
@@ -192,10 +208,12 @@ predicttest <- function(targetVar, model){
   return(preds)
 }
 
-pp1<- predicttest("points_sum", b1)
-pp2<- predicttest("games_count", b2)
-pp3<- predicttest("games_above_count", b3)
+pp1<- predicttest("points_sum", p1)
+pp2<- predicttest("games_count", p2)
+pp3<- predicttest("games_above_count", p3)
 
-save("b1", "b2", "b3", "p1", "p2", "p3", file = "clean_data/models.RData")
+save("b1", "b2", "b3", "p1", "p2", "p3", "pp1",
+     "pp2", "pp3", "pb1", "pb2", "pb3","ppbat", "pppitch",
+     file = "clean_data/models.RData")
 
      
