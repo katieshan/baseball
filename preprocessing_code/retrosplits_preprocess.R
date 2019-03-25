@@ -198,7 +198,7 @@ retrorun <- function(year){
   
   rm(retrobats, bats_mean, bats_mode, bats_sd, bats_sum, games_above, mean_points)
   
-  write.csv(bats_all, outbattrain)
+  saveRDS(bats_all, outbattrain)
   
   #now pitchers
   pitches_sum <- retropitches %>%
@@ -248,7 +248,7 @@ retrorun <- function(year){
            age=(start-birthdate)/365.25) %>%
     select(-playerID, -bbrefID, -nameFirst, -nameLast, -nameGiven, -debut, -birthdate)
   
-  write.csv(pitches_all, outpitchtrain)
+  saveRDS(pitches_all, outpitchtrain)
 }
 
 retrorun(2010)
