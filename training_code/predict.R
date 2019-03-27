@@ -1,5 +1,5 @@
-setwd("C:/Users/580377/Documents/Personal/GitHub/baseball")
-# setwd("C:/Users/Katie/Documents/GitHub/baseball")
+# setwd("C:/Users/580377/Documents/Personal/GitHub/baseball")
+setwd("C:/Users/Katie/Documents/GitHub/baseball")
 source("preprocessing_code/calcpoints.R")
 library(tidyverse)
 library(mlr)
@@ -25,8 +25,10 @@ bat2018 <- batimport(2018) %>% mutate(age=as.numeric(age), since_debut=as.numeri
 # fanbat <- read_csv("raw_data/FanGraphs Leaderboardbat.csv") %>%
 #   mutate(mergename=tolower(gsub("[^[:alnum:]]","", Name)))
 
-fanc <- read_csv("raw_data/FanGraphs Leaderboardcatcher.csv") %>%
-     mutate(fanpos="C", mergename=tolower(gsub("[^[:alnum:]]","", Name)))
+fandh <- read_csv("raw_data/FanGraphs Leaderboarddh.csv") %>%
+  mutate(fanpos="DH", mergename=tolower(gsub("[^[:alnum:]]","", Name)))
+fanc <- read_csv("raw_data/FanGraphs Leaderboardc.csv") %>%
+  mutate(fanpos="C", mergename=tolower(gsub("[^[:alnum:]]","", Name)))
 fan1b <- read_csv("raw_data/FanGraphs Leaderboard1b.csv") %>%
   mutate(fanpos="1B", mergename=tolower(gsub("[^[:alnum:]]","", Name)))
 fan2b <- read_csv("raw_data/FanGraphs Leaderboard2b.csv") %>%
@@ -38,7 +40,8 @@ fanss <- read_csv("raw_data/FanGraphs Leaderboardss.csv") %>%
 fanof <- read_csv("raw_data/FanGraphs Leaderboardof.csv") %>%
   mutate(fanpos="OF", mergename=tolower(gsub("[^[:alnum:]]","", Name)))
 
-fanbat <- rbind(fanc, fan1b, fan2b, fan3b, fanss, fanof)
+
+fanbat <- rbind(fanc, fan1b, fan2b, fan3b, fanss, fanof, fandh)
 fanbat <- fanbat[!duplicated(fanbat[c("mergename")]),]
 
 people <- readRDS("clean_data/databank_people.rds")
@@ -227,12 +230,12 @@ batpred3$pred_games_above_count=batpred3$response*(88-0)+0
 batpred1 <- select(batpred1, pred_points_sum)
 batpred2 <- select(batpred2, pred_games_count)
 batpred3 <- select(batpred3, pred_games_above_count)
-batpredperson <- select(batpred, person.key)
+batpredperson <- select(batpred, person.key, points_sum_lag1, games_count_lag1, games_above_count_lag1, points_sd_lag1)
 
 batpredout<- cbind(batpredperson, batpred1, batpred2, batpred3)
 
 batnew <- merge(batnew, batpredout, by="person.key", all.x = TRUE) %>%
-  select(person.key, Team, Name, fanpoints, G, pred_points_sum, pred_games_count, pred_games_above_count, fanpos, position)
+  select(person.key, Team, Name, fanpoints, G, pred_points_sum, pred_games_count, pred_games_above_count, fanpos, position, points_sum_lag1, games_count_lag1, games_above_count_lag1, points_sd_lag1)
 write.csv(batnew, "FinalBatPreds.csv")
 
 #Now pitching
@@ -272,11 +275,11 @@ pitchpred3$pred_games_above_count=pitchpred3$response*(31-0)+0
 pitchpred1 <- select(pitchpred1, pred_points_sum)
 pitchpred2 <- select(pitchpred2, pred_games_count)
 pitchpred3 <- select(pitchpred3, pred_games_above_count)
-pitchpredperson <- select(pitchpred, person.key)
+pitchpredperson <- select(pitchpred, person.key, points_sum_lag1, games_count_lag1, games_above_count_lag1, points_sd_lag1)
 
 pitchpredout<- cbind(pitchpredperson, pitchpred1, pitchpred2, pitchpred3)
 
 pitchnew <- merge(pitchnew, pitchpredout, by="person.key", all.x = TRUE) %>%
-  select(person.key, Team, Name, fanpoints, G, pred_points_sum, pred_games_count, pred_games_above_count, position)
+  select(person.key, Team, Name, fanpoints, G, pred_points_sum, pred_games_count, pred_games_above_count, position, points_sum_lag1, games_count_lag1, games_above_count_lag1, points_sd_lag1)
 
 write.csv(pitchnew, "FinalpitchPreds.csv")
