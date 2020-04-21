@@ -12,7 +12,7 @@ getmode <- function(v) {
 
 #This function cleans the retrosheet data
 retrorun <- function(year){
-  
+  year=2019
   infile = paste0("raw_data/retrosplits-master/retrosplits-master/daybyday/playing-", year ,".csv")
   outpitch = paste0("clean_data/retropitches", year ,".csv")
   outbat = paste0("clean_data/retrobats", year ,".csv")
@@ -260,3 +260,4 @@ retrorun(2015)
 retrorun(2016)
 retrorun(2017)
 retrorun(2018)
+retrorun(2019)

@@ -5,8 +5,8 @@ setwd("C:/Users/Katie/Documents/GitHub/baseball")
 source("preprocessing_code/calcpoints.R")
 library(tidyverse)
 
-people <- read_csv("raw_data/baseballdatabank-2019.2/baseballdatabank-2019.2/core/People.csv")
-appearances <- read_csv("raw_data/baseballdatabank-2019.2/baseballdatabank-2019.2/core/Appearances.csv")
+people <- read_csv("raw_data/2020/baseballdatabank-master/baseballdatabank-master/core/People.csv")
+appearances <- read_csv("raw_data/2020/baseballdatabank-master/baseballdatabank-master/core/Appearances.csv")
 
 people <- people %>%
   select(-birthCountry, -birthState, -birthCity, -deathYear, -deathMonth, -deathDay, -deathCountry, -deathState, -deathCity) %>%
